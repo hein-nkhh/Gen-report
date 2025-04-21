@@ -2,6 +2,7 @@ import torch
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 from nltk.translate.meteor_score import meteor_score
 from nltk.tokenize import word_tokenize
+from config import Config
 import nltk
 nltk.download('wordnet')
 nltk.download('punkt')
