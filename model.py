@@ -74,6 +74,20 @@ class TextDecoder(nn.Module):
 
     def generate(self, input_ids=None, attention_mask=None, inputs_embeds=None,
                  max_length=50, **kwargs):
+        # Ensure inputs_embeds is not empty
+        if inputs_embeds is None and input_ids is None:
+            raise ValueError("Both inputs_embeds and input_ids cannot be None")
+
+        # Check the sizes of inputs
+        if inputs_embeds is not None:
+            if inputs_embeds.size(1) == 0:
+                raise ValueError("inputs_embeds cannot be empty")
+
+        if input_ids is not None:
+            if input_ids.size(1) == 0:
+                raise ValueError("input_ids cannot be empty")
+
+        # Generate output
         with torch.no_grad():
             output_ids = self.decoder.generate(
                 input_ids=input_ids,
@@ -106,11 +120,26 @@ class VisionTextModel(nn.Module):
     def generate(self, images, input_texts, max_length=50, **kwargs):
         device = images.device
         vision_embeds = self.vision_encoder(images)
+
+        # Ensure that vision_embeds is not empty
+        if vision_embeds.size(1) == 0:
+            raise ValueError("vision_embeds cannot be empty")
+
         input_ids, attention_mask = self.text_decoder.encode_text(input_texts)
         input_ids = input_ids.to(device)
         attention_mask = attention_mask.to(device)
+
+        # Ensure that input_ids are valid
+        if input_ids.size(1) == 0:
+            raise ValueError("input_ids cannot be empty")
+
         text_embeds = self.text_decoder.get_input_embeddings(input_ids)
         fused = self.cross_attention(text_embeds, vision_embeds)
+
+        # Ensure that fused embeddings are valid
+        if fused.size(1) == 0:
+            raise ValueError("Fused embeddings cannot be empty")
+
         return self.text_decoder.generate(inputs_embeds=fused,
                                         attention_mask=attention_mask,
                                         max_length=max_length,
