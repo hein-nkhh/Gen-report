@@ -63,8 +63,15 @@ class TextDecoder(nn.Module):
     def forward(self, input_ids, attention_mask, vision_embeds=None, labels=None):
         if vision_embeds is not None:
             inputs_embeds = self.get_input_embeddings(input_ids)
+
+            # Concatenate vision token to text embeddings
             vision_token = vision_embeds.mean(dim=1, keepdim=True)
-            inputs_embeds = torch.cat([vision_token, inputs_embeds[:,1:,:]], dim=1)
+            inputs_embeds = torch.cat([vision_token, inputs_embeds[:, 1:, :]], dim=1)
+
+            # Fix attention_mask to match new inputs_embeds length
+            vision_attn = torch.ones((attention_mask.size(0), 1), dtype=attention_mask.dtype).to(attention_mask.device)
+            attention_mask = torch.cat([vision_attn, attention_mask[:, 1:]], dim=1)
+
             return self.decoder(inputs_embeds=inputs_embeds,
                                 attention_mask=attention_mask,
                                 labels=labels)
@@ -77,6 +84,7 @@ class TextDecoder(nn.Module):
         # Ensure inputs_embeds is not empty
         if inputs_embeds is None and input_ids is None:
             raise ValueError("Both inputs_embeds and input_ids cannot be None")
+        
 
         # Check the sizes of inputs
         if inputs_embeds is not None:
