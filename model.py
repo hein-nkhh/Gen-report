@@ -83,17 +83,20 @@ class TextDecoder(nn.Module):
                  max_length=50, **kwargs):
         # Ensure inputs_embeds is not empty
         if inputs_embeds is None and input_ids is None:
-            raise ValueError("Both inputs_embeds and input_ids cannot be None")
+            # raise ValueError("Both inputs_embeds and input_ids cannot be None")
+            print("Warning: Both inputs_embeds and input_ids are None. No generation will be performed.")
         
 
         # Check the sizes of inputs
         if inputs_embeds is not None:
             if inputs_embeds.size(1) == 0:
-                raise ValueError("inputs_embeds cannot be empty")
+                # raise ValueError("inputs_embeds cannot be empty")
+                print("Warning: inputs_embeds cannot be empty. No generation will be performed.")
 
         if input_ids is not None:
             if input_ids.size(1) == 0:
-                raise ValueError("input_ids cannot be empty")
+                # raise ValueError("input_ids cannot be empty")
+                print("Warning: input_ids cannot be empty. No generation will be performed.")
 
         # Generate output
         with torch.no_grad():
