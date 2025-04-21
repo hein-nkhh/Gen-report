@@ -26,13 +26,14 @@ class VisionEncoder(nn.Module):
     def forward(self, images):
         feats = self.encoder.forward_features(images)  # (B, H, W, C)
         B, H, W, C = feats.shape
-        feats = feats.view(B, H * W, C)
+        feats = feats.view(B, H*W, C)
         return self.projection(feats)
 
 class CrossAttention(nn.Module):
     def __init__(self, hidden_dim=1024, num_heads=8, dropout=0.1):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim=hidden_dim, num_heads=num_heads, dropout=dropout, batch_first=True)
+        self.attn = nn.MultiheadAttention(embed_dim=hidden_dim, num_heads=num_heads,
+                                        dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, text_embeds, vision_embeds):
@@ -40,7 +41,7 @@ class CrossAttention(nn.Module):
         return self.dropout(attended + text_embeds)
 
 class TextDecoder(nn.Module):
-    def __init__(self, model_name="microsoft/biogpt"):
+    def __init__(self, model_name='microsoft/biogpt'):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.decoder = AutoModelForCausalLM.from_pretrained(model_name)
@@ -49,12 +50,12 @@ class TextDecoder(nn.Module):
     def encode_text(self, texts, max_length=153):
         encoding = self.tokenizer(
             texts,
-            padding="max_length",
+            padding='max_length',
             truncation=True,
             max_length=max_length,
-            return_tensors="pt"
+            return_tensors='pt'
         )
-        return encoding["input_ids"], encoding["attention_mask"]
+        return encoding['input_ids'], encoding['attention_mask']
 
     def get_input_embeddings(self, input_ids):
         return self.decoder.get_input_embeddings()(input_ids)
@@ -63,20 +64,16 @@ class TextDecoder(nn.Module):
         if vision_embeds is not None:
             inputs_embeds = self.get_input_embeddings(input_ids)
             vision_token = vision_embeds.mean(dim=1, keepdim=True)
-            inputs_embeds = torch.cat([vision_token, inputs_embeds[:, 1:, :]], dim=1)
-            return self.decoder(
-                inputs_embeds=inputs_embeds,
-                attention_mask=attention_mask,
-                labels=labels
-            )
-        else:
-            return self.decoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels
-            )
+            inputs_embeds = torch.cat([vision_token, inputs_embeds[:,1:,:]], dim=1)
+            return self.decoder(inputs_embeds=inputs_embeds,
+                                attention_mask=attention_mask,
+                                labels=labels)
+        return self.decoder(input_ids=input_ids,
+                            attention_mask=attention_mask,
+                            labels=labels)
 
-    def generate(self, input_ids=None, attention_mask=None, inputs_embeds=None, max_length=50, **kwargs):
+    def generate(self, input_ids=None, attention_mask=None, inputs_embeds=None,
+                 max_length=50, **kwargs):
         with torch.no_grad():
             output_ids = self.decoder.generate(
                 input_ids=input_ids,
@@ -101,16 +98,20 @@ class VisionTextModel(nn.Module):
         input_ids = input_ids.to(device)
         attention_mask = attention_mask.to(device)
         text_embeds = self.text_decoder.get_input_embeddings(input_ids)
-        cross_attended = self.cross_attention(text_embeds, vision_embeds)
-        outputs = self.text_decoder.decoder(inputs_embeds=cross_attended, attention_mask=attention_mask, labels=labels)
-        return outputs
+        fused = self.cross_attention(text_embeds, vision_embeds)
+        return self.text_decoder.decoder(inputs_embeds=fused,
+                                        attention_mask=attention_mask,
+                                        labels=labels)
 
-    def generate(self, images, input_text, max_length=50, **kwargs):
+    def generate(self, images, input_texts, max_length=50, **kwargs):
         device = images.device
         vision_embeds = self.vision_encoder(images)
-        input_ids, attention_mask = self.text_decoder.encode_text(input_text)
+        input_ids, attention_mask = self.text_decoder.encode_text(input_texts)
         input_ids = input_ids.to(device)
         attention_mask = attention_mask.to(device)
         text_embeds = self.text_decoder.get_input_embeddings(input_ids)
-        cross_attended = self.cross_attention(text_embeds, vision_embeds)
-        return self.text_decoder.generate(inputs_embeds=cross_attended, attention_mask=attention_mask, max_length=max_length, **kwargs)
+        fused = self.cross_attention(text_embeds, vision_embeds)
+        return self.text_decoder.generate(inputs_embeds=fused,
+                                        attention_mask=attention_mask,
+                                        max_length=max_length,
+                                        **kwargs)

@@ -1,16 +1,31 @@
-import torch
+# config.py
 import os
+import torch
 
 class Config:
-    def __init__(self):
-        self.batch_size = 32
-        self.learning_rate = 5e-5
-        self.epochs = 10
-        self.max_len = 153
-        self.image_size = (224, 224)
-        self.train_csv = '/kaggle/input/data-split-csv/Train_Data.csv'
-        self.cv_csv = '/kaggle/input/data-split-csv/CV_Data.csv'
-        self.test_csv = '/kaggle/input/data-split-csv/Test_Data.csv'
-        self.image_dir = '/kaggle/input/image-features-attention/xray_images'
-        self.save_model_path = './model_checkpoint.pth'
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Data paths
+    train_csv = '/kaggle/input/data-split-csv/Train_Data.csv'
+    cv_csv = '/kaggle/input/data-split-csv/CV_Data.csv'
+    test_csv = '/kaggle/input/data-split-csv/Test_Data.csv'
+    image_dir = '/kaggle/input/image-features-attention/xray_images'
+
+    # Training hyperparameters
+    batch_size = 16
+    epochs = 10
+    lr = 5e-5
+    warmup_steps = 500
+    max_len = 153
+
+    # Model saving
+    output_dir = '/kaggle/working/checkpoints'
+    best_model_path = os.path.join(output_dir, 'best_model.pt')
+
+    # Model configuration
+    vision_encoder_name = 'swin_base_patch4_window7_224'
+    vision_output_dim = 1024
+    cross_attn_dim = 1024
+    cross_attn_heads = 8
+    text_decoder_model = 'microsoft/biogpt'
+
+    # Device
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
