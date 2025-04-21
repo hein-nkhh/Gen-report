@@ -1,4 +1,3 @@
-# evaluation.py
 import torch
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 from nltk.translate.meteor_score import meteor_score
@@ -7,7 +6,7 @@ import nltk
 nltk.download('wordnet')
 nltk.download('punkt')
 
-def evaluate_model(model, data_loader, device):
+def evaluate_model(model, data_loader, device, config=None):
     model.eval()
     total_loss = 0
     gens, refs = [], []
@@ -15,7 +14,7 @@ def evaluate_model(model, data_loader, device):
     with torch.no_grad():
         for images, reports in data_loader:
             images = images.to(device)
-            input_ids, attention_mask = model.text_decoder.encode_text(reports, max_length=Config.max_len)
+            input_ids, attention_mask = model.text_decoder.encode_text(reports, max_length=config.max_len if config else 256)
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
             outputs = model(images, reports, labels=input_ids)
@@ -29,30 +28,41 @@ def evaluate_model(model, data_loader, device):
 
     # Metrics
     avg_loss = total_loss / len(data_loader)
-    print(f"Test Loss: {avg_loss:.4f}")
-    # BLEU
     smooth = SmoothingFunction().method1
     gen_tokens = [word_tokenize(g.lower()) for g in gens]
     ref_tokens = [[word_tokenize(r.lower())] for r in refs]
-    for w in [(1,0,0,0),(0.5,0.5,0,0),(0.33,0.33,0.33,0),(0.25,0.25,0.25,0.25)]:
-        print(f"BLEU{len(w)}: {corpus_bleu(ref_tokens, gen_tokens, weights=w, smoothing_function=smooth):.4f}")
-    # METEOR
-    m_scores = [meteor_score([word_tokenize(r)], word_tokenize(g)) for r,g in zip(refs,gens)]
-    print(f"METEOR: {sum(m_scores)/len(m_scores):.4f}")
 
-    # ROUGE-L
-    def lcs(x,y):
-        m,n=len(x),len(y)
-        L=[[0]*(n+1) for _ in range(m+1)]
-        for i in range(1,m+1):
-            for j in range(1,n+1):
-                L[i][j] = L[i-1][j-1]+1 if x[i-1]==y[j-1] else max(L[i-1][j],L[i][j-1])
+    bleu1 = corpus_bleu(ref_tokens, gen_tokens, weights=(1,0,0,0), smoothing_function=smooth)
+    bleu2 = corpus_bleu(ref_tokens, gen_tokens, weights=(0.5,0.5,0,0), smoothing_function=smooth)
+    bleu3 = corpus_bleu(ref_tokens, gen_tokens, weights=(0.33,0.33,0.33,0), smoothing_function=smooth)
+    bleu4 = corpus_bleu(ref_tokens, gen_tokens, weights=(0.25,0.25,0.25,0.25), smoothing_function=smooth)
+    
+    m_scores = [meteor_score([word_tokenize(r)], word_tokenize(g)) for r, g in zip(refs, gens)]
+    meteor = sum(m_scores) / len(m_scores)
+
+    def lcs(x, y):
+        m, n = len(x), len(y)
+        L = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                L[i][j] = L[i-1][j-1] + 1 if x[i-1] == y[j-1] else max(L[i-1][j], L[i][j-1])
         return L[m][n]
+    
     scores = []
-    for r,g in zip(refs,gens):
+    for r, g in zip(refs, gens):
         rt, gt = word_tokenize(r), word_tokenize(g)
-        l = lcs(rt,gt)
-        rec = l/len(rt) if rt else 0
-        prec = l/len(gt) if gt else 0
-        scores.append((2*rec*prec/(rec+prec)) if rec+prec else 0)
-    print(f"ROUGE-L: {sum(scores)/len(scores):.4f}")
+        l = lcs(rt, gt)
+        rec = l / len(rt) if rt else 0
+        prec = l / len(gt) if gt else 0
+        scores.append((2 * rec * prec / (rec + prec)) if rec + prec else 0)
+    rougeL = sum(scores) / len(scores)
+
+    return {
+        "loss": avg_loss,
+        "bleu1": bleu1,
+        "bleu2": bleu2,
+        "bleu3": bleu3,
+        "bleu4": bleu4,
+        "meteor": meteor,
+        "rougeL": rougeL
+    }
